@@ -215,20 +215,32 @@ namespace SendCloudApi.Net
         public async Task<byte[]> Download(string url)
         {
             var httpClient = new HttpClient();
-            httpClient.DefaultRequestHeaders.Add("Authorization", $"Basic {Convert.ToBase64String(Encoding.UTF8.GetBytes(_apiKey + ":" + _apiSecret))}");
+
+            // Auth
+            var auth = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{_apiKey}:{_apiSecret}"));
+            httpClient.DefaultRequestHeaders.Authorization =
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", auth);
+
             if (!string.IsNullOrWhiteSpace(_partnerUuid))
             {
                 httpClient.DefaultRequestHeaders.Add("Sendcloud-Partner-Id", _partnerUuid);
             }
-            httpClient.DefaultRequestHeaders.Accept.Clear();
-            httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/pdf"));
+
+            // WICHTIG: accept nicht zu hart setzen, viele APIs liefern auch ohne das PDF
+            // httpClient.DefaultRequestHeaders.Accept.Clear();
+            // httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/pdf"));
 
             var response = await httpClient.GetAsync(url).ConfigureAwait(false);
-            if (response.IsSuccessStatusCode)
+
+            if (!response.IsSuccessStatusCode)
             {
-                return await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+                // hier siehst du endlich, was los ist
+                var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                throw new HttpRequestException(
+                    $"Label download failed. Status: {(int)response.StatusCode} {response.ReasonPhrase}. Body: {body}");
             }
-            return null;
+
+            return await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
         }
 
         //public async Task<Stream> Download(string url)
